@@ -214,6 +214,19 @@
   .actions { display: flex; gap: 12px; justify-content: center; margin-top: 26px; flex-wrap: wrap; }
   .actions .btn { padding: 13px 26px; font-size: 15px; }
 
+  /* ---------- local winner history ---------- */
+  .history { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .history summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent-deep); list-style: none; display: flex; align-items: center; gap: 8px; }
+  .history summary::-webkit-details-marker { display: none; }
+  .history summary::before { content: "▸"; transition: transform .2s; font-size: 12px; }
+  .history[open] summary::before { transform: rotate(90deg); }
+  .history-list { margin: 14px 0; display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; }
+  .hitem { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 13px; }
+  .hitem .htime { color: var(--ink-soft); font-size: 12px; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .hitem .hnames { color: var(--ink); font-weight: 500; font-size: 14px; word-break: break-word; line-height: 1.5; }
+  .history-empty { color: var(--ink-soft); font-size: 13px; margin: 12px 0; }
+  #clearHistory { padding: 8px 16px; font-size: 13px; }
+
   footer { text-align: center; color: var(--ink-soft); font-size: 12.5px; margin-top: 34px; }
   footer .dot { color: var(--accent); margin: 0 6px; }
 
@@ -241,9 +254,7 @@
 
 <div class="wrap">
   <header>
-    <div class="kicker">Uranus&nbsp;·&nbsp;Lucky Draw</div>
     <h1 class="serif">幸運<span class="glyph">抽籤</span></h1>
-    <p class="subtitle">貼上名單，決定中獎人數，讓命運替你揀人。每位中獎者都會配一個號碼，方便對號認人。</p>
   </header>
 
   <!-- setup (always on screen) -->
@@ -279,6 +290,12 @@
 
     <button class="btn btn-primary" id="drawBtn">開始抽籤 ✦</button>
     <div class="err" id="err"></div>
+
+    <details class="history" id="historyBox">
+      <summary>中獎紀錄 <span id="historyCount"></span></summary>
+      <div id="historyList" class="history-list"></div>
+      <button class="btn btn-ghost" id="clearHistory" type="button">清除紀錄</button>
+    </details>
   </section>
 
   <!-- result panel: roller lands & STAYS on screen; congrats shown below it -->
@@ -302,7 +319,6 @@
     </div>
   </section>
 
-  <footer>幸運抽籤<span class="dot">✦</span>公平隨機，絕不作弊</footer>
 </div>
 
 <script>
@@ -466,7 +482,49 @@
     rollLabel.textContent = activeCfg.k === 1 ? "命運選中 ✦" : "抽獎完成 ✦";
     resultSub.textContent = "由 " + activeCfg.list.length + " 位參加者中，抽出 " + activeCfg.k + " 位"
       + (activeCfg.unique ? "" : "（允許重複）");
+    saveHistory(drawn);
   }
+
+  // ----- local winner history (saved in this browser) -----
+  var HKEY = "luckyDrawHistory";
+  var historyList = $("#historyList"), historyCount = $("#historyCount");
+  function readHistory() {
+    try { return JSON.parse(localStorage.getItem(HKEY) || "[]"); } catch (e) { return []; }
+  }
+  function loadHistory() {
+    var arr = readHistory();
+    historyCount.textContent = arr.length ? "（" + arr.length + "）" : "";
+    if (!arr.length) { historyList.innerHTML = '<div class="history-empty">未有紀錄</div>'; return; }
+    historyList.innerHTML = "";
+    arr.forEach(function (rec) {
+      var d = document.createElement("div"); d.className = "hitem";
+      var t = document.createElement("div"); t.className = "htime"; t.textContent = rec.time;
+      var n = document.createElement("div"); n.className = "hnames"; n.textContent = rec.names.join("、");
+      d.appendChild(t); d.appendChild(n); historyList.appendChild(d);
+    });
+  }
+  function saveHistory(names) {
+    if (!names || !names.length) return;
+    var arr = readHistory();
+    var d = new Date(), p = function (x) { return (x < 10 ? "0" : "") + x; };
+    var time = d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+    arr.unshift({ time: time, names: names.slice() });
+    if (arr.length > 100) arr = arr.slice(0, 100);
+    try { localStorage.setItem(HKEY, JSON.stringify(arr)); } catch (e) {}
+    loadHistory();
+  }
+  var clearArmed = false, clearTimer = null;
+  $("#clearHistory").addEventListener("click", function () {
+    var btn = this;
+    if (!clearArmed) {
+      clearArmed = true; btn.textContent = "再撳一次確認清除";
+      clearTimer = setTimeout(function () { clearArmed = false; btn.textContent = "清除紀錄"; }, 3000);
+      return;
+    }
+    clearTimeout(clearTimer); clearArmed = false; btn.textContent = "清除紀錄";
+    try { localStorage.removeItem(HKEY); } catch (e) {}
+    loadHistory();
+  });
 
   $("#drawBtn").addEventListener("click", function () {
     var cfg = validate();
@@ -535,5 +593,6 @@
   }
 
   refresh();
+  loadHistory();
 })();
 </script>
