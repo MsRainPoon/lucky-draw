@@ -277,8 +277,9 @@
       </div>
       <ul class="winners" id="winnerList"></ul>
       <div class="actions">
-        <button class="btn btn-gold" id="againBtn">同一份名單再抽</button>
+        <button class="btn btn-gold" id="againBtn">再抽一次</button>
         <button class="btn btn-ghost" id="copyBtn">複製結果</button>
+        <button class="btn btn-ghost" id="backBtn">返回設定</button>
       </div>
     </div>
   </section>
@@ -292,6 +293,7 @@
   var $ = function (s) { return document.querySelector(s); };
   var namesEl = $("#names"), winnersEl = $("#winners"), uniqueEl = $("#unique");
   var nameCount = $("#nameCount"), maxHint = $("#maxHint"), errEl = $("#err");
+  var setupStage = $("#setupStage");
   var resultPanel = $("#resultPanel"), roller = $("#roller"), resultInner = $("#resultInner");
   var rollName = $("#rollName"), rollLabel = $("#rollLabel"), winnerList = $("#winnerList"), resultSub = $("#resultSub");
   var MIN = 2, MAX = 500;
@@ -369,14 +371,15 @@
   function drawSequence(cfg) {
     var winners = pick(cfg);
     lastNames = cfg.list;
-    // show the roller; setup stays exactly where it is
+    // switch to the dedicated draw page
+    setupStage.hidden = true;
     resultPanel.hidden = false;
     roller.classList.remove("won");
     rollLabel.textContent = "命運轉動中…";
     rollName.classList.remove("landed");
     rollName.classList.add("spin");
     resultInner.hidden = true;
-    if (!reduce) roller.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
 
     if (reduce) { reveal(winners, cfg); return; }
 
@@ -432,6 +435,12 @@
   $("#againBtn").addEventListener("click", function () {
     var cfg = validate();
     if (cfg) drawSequence(cfg);
+  });
+  $("#backBtn").addEventListener("click", function () {
+    resultPanel.hidden = true;
+    setupStage.hidden = false;
+    errEl.textContent = "";
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
   });
   $("#copyBtn").addEventListener("click", function () {
     var lines = (window._lastWinners || []).map(function (n, i) { return (i + 1) + ". " + n; });
