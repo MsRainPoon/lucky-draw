@@ -1,4 +1,7 @@
 <title>幸運抽籤・Lucky Draw</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E%F0%9F%8E%89%3C/text%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#B39EB5">
 <style>
   :root {
     /* palette built around the requested #B39EB5 */
@@ -214,6 +217,20 @@
   footer { text-align: center; color: var(--ink-soft); font-size: 12.5px; margin-top: 34px; }
   footer .dot { color: var(--accent); margin: 0 6px; }
 
+  /* ---------- phone layout ---------- */
+  @media (max-width: 480px) {
+    .wrap { padding-left: 15px; padding-right: 15px; }
+    .card { padding: 20px 17px; }
+    .roller { padding: 32px 16px; }
+    .kicker { font-size: 11px; letter-spacing: .22em; }
+    .kicker::before, .kicker::after { width: 18px; }
+    .subtitle { font-size: 14px; }
+    .actions { flex-direction: column; gap: 10px; }
+    .actions .btn { width: 100%; padding: 15px; font-size: 16px; }
+    .winners { grid-template-columns: 1fr; }
+    textarea { min-height: 160px; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     .winner { opacity: 1; transform: none; }
@@ -277,9 +294,10 @@
       </div>
       <ul class="winners" id="winnerList"></ul>
       <div class="actions">
-        <button class="btn btn-gold" id="againBtn">再抽一次</button>
-        <button class="btn btn-ghost" id="copyBtn">複製結果</button>
-        <button class="btn btn-ghost" id="backBtn">返回設定</button>
+        <button class="btn btn-gold" id="nextBtn" hidden>抽下一位</button>
+        <button class="btn btn-gold" id="againBtn" hidden>再抽一次</button>
+        <button class="btn btn-ghost" id="copyBtn" hidden>複製結果</button>
+        <button class="btn btn-ghost" id="backBtn" hidden>返回設定</button>
       </div>
     </div>
   </section>
@@ -367,65 +385,87 @@
   }
 
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var nextBtn = $("#nextBtn"), againBtn = $("#againBtn"), copyBtn = $("#copyBtn"), backBtn = $("#backBtn");
+
+  // draw state: winners are all pre-picked, then revealed ONE BY ONE
+  var queue = [], drawn = [], activeCfg = null, spinning = false;
 
   function drawSequence(cfg) {
-    var winners = pick(cfg);
-    lastNames = cfg.list;
+    activeCfg = cfg;
+    queue = pick(cfg);   // predetermined winners (unique set if 不重複)
+    drawn = [];
+    window._lastWinners = drawn;
     // switch to the dedicated draw page
     setupStage.hidden = true;
     resultPanel.hidden = false;
-    roller.classList.remove("won");
-    rollLabel.textContent = "命運轉動中…";
-    rollName.classList.remove("landed");
-    rollName.classList.add("spin");
     resultInner.hidden = true;
+    winnerList.innerHTML = "";
+    resultSub.textContent = "";
+    [nextBtn, againBtn, copyBtn, backBtn].forEach(function (b) { b.hidden = true; });
     window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
-
-    if (reduce) { reveal(winners, cfg); return; }
-
-    var pool = cfg.list, start = Date.now(), dur = 1600, delay = 55;
-    function tick() {
-      var t = Date.now() - start;
-      rollName.textContent = pool[rand(pool.length)];
-      delay = 55 + Math.pow(t / dur, 3) * 220; // ease out: slow down
-      if (t < dur) { setTimeout(tick, delay); }
-      else { reveal(winners, cfg); }
-    }
-    tick();
+    revealNext();
   }
 
-  function reveal(winners, cfg) {
-    // 1) the spinner lands and STAYS in the roller box (keeps the rolling screen)
+  function revealNext() {
+    if (spinning || !queue.length) return;
+    spinning = true;
+    var name = queue.shift();
+    roller.classList.remove("won");
+    rollName.classList.remove("landed");
+    rollName.classList.add("spin");
+    rollLabel.textContent = "命運轉動中…";
+    nextBtn.hidden = true;
+
+    if (reduce) { land(name); return; }
+    var pool = activeCfg.list, start = Date.now(), dur = 1500, delay = 55;
+    (function tick() {
+      var t = Date.now() - start;
+      rollName.textContent = pool[rand(pool.length)];
+      delay = 55 + Math.pow(t / dur, 3) * 220; // ease out
+      if (t < dur) { setTimeout(tick, delay); }
+      else { land(name); }
+    })();
+  }
+
+  function land(name) {
+    spinning = false;
+    drawn.push(name);
+    var n = drawn.length;
+    // roller lands on this winner and stays
     rollName.classList.remove("spin");
     rollName.classList.add("landed");
     roller.classList.add("won");
-    if (winners.length === 1) {
-      rollLabel.textContent = "命運選中 ✦";
-      rollName.textContent = winners[0];
-    } else {
-      rollLabel.textContent = "抽獎完成 ✦";
-      rollName.textContent = "已抽出 " + winners.length + " 位";
-    }
-    // 2) congrats list appears BELOW the roller
-    winnerList.innerHTML = "";
-    winners.forEach(function (name, i) {
-      var li = document.createElement("li");
-      li.className = "winner";
-      li.style.animationDelay = (0.06 * i) + "s";
-      var num = document.createElement("div");
-      num.className = "num"; num.textContent = i + 1;
-      var box = document.createElement("div");
-      var nm = document.createElement("div"); nm.className = "wname"; nm.textContent = name;
-      var sub = document.createElement("div"); sub.className = "wsub"; sub.textContent = (i + 1) + " 號中獎者";
-      box.appendChild(nm); box.appendChild(sub);
-      li.appendChild(num); li.appendChild(box);
-      winnerList.appendChild(li);
-    });
-    resultSub.textContent = "由 " + cfg.list.length + " 位參加者中，抽出 " + winners.length + " 位"
-      + (cfg.unique ? "" : "（允許重複）");
+    rollName.textContent = name;
+    rollLabel.textContent = "第 " + n + " 位中獎者 ✦";
+    // append this winner to the list below
+    var li = document.createElement("li");
+    li.className = "winner";
+    var num = document.createElement("div");
+    num.className = "num"; num.textContent = n;
+    var box = document.createElement("div");
+    var nm = document.createElement("div"); nm.className = "wname"; nm.textContent = name;
+    var sub = document.createElement("div"); sub.className = "wsub"; sub.textContent = n + " 號中獎者";
+    box.appendChild(nm); box.appendChild(sub);
+    li.appendChild(num); li.appendChild(box);
+    winnerList.appendChild(li);
+    resultSub.textContent = "已抽出 " + n + " / " + activeCfg.k + " 位（共 " + activeCfg.list.length + " 位參加者）";
     resultInner.hidden = false;
     if (!reduce) burst();
-    window._lastWinners = winners;
+
+    if (queue.length) {
+      nextBtn.hidden = false;
+      nextBtn.textContent = "抽下一位（還有 " + queue.length + " 位）";
+    } else {
+      finishDraw();
+    }
+  }
+
+  function finishDraw() {
+    nextBtn.hidden = true;
+    againBtn.hidden = false; copyBtn.hidden = false; backBtn.hidden = false;
+    rollLabel.textContent = activeCfg.k === 1 ? "命運選中 ✦" : "抽獎完成 ✦";
+    resultSub.textContent = "由 " + activeCfg.list.length + " 位參加者中，抽出 " + activeCfg.k + " 位"
+      + (activeCfg.unique ? "" : "（允許重複）");
   }
 
   $("#drawBtn").addEventListener("click", function () {
@@ -436,6 +476,7 @@
     var cfg = validate();
     if (cfg) drawSequence(cfg);
   });
+  $("#nextBtn").addEventListener("click", function () { revealNext(); });
   $("#backBtn").addEventListener("click", function () {
     resultPanel.hidden = true;
     setupStage.hidden = false;
